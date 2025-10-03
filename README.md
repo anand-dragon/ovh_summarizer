@@ -156,3 +156,39 @@ With coverage
   task docker:down   # stop & remove containers + volumes
   task docs:openapi  # export OpenAPI JSON
 ```
+
+## Architecture Decisions
+
+### Why this design?
+- **Separation of concerns**:  
+  - **API** -> handles fast requests (create, list, get documents).  
+  - **Worker** -> runs slow/background jobs (fetch, extract, summarize).  
+  This keeps the API responsive even if summarization is slow or fails.
+
+- **Scalability**:  
+  - API and Worker are separate containers -> each can scale independently.  
+  - Add more API replicas for traffic, or more Worker replicas for throughput.  
+  - Redis queue absorbs bursts and balances jobs across workers.
+
+- **Robustness**:  
+  - Failures in the Worker do not affect API uptime.  
+  - Jobs are idempotent and retryable (document re-fetched by UUID).  
+  - Clear statuses (`PENDING -> PROCESSING -> SUCCESS/FAILED`) for monitoring and recovery.  
+  - Timeouts on all external calls (web fetch, Ollama).
+
+- **Repository pattern**:  
+  - Business rules (e.g. uniqueness, re-summarization) live in the repository, keeping the router thin.  
+  - Easier testing (can mock repository in unit tests).
+
+- **Containers & deployability**:  
+  - API, Worker, Redis, Postgres, and Ollama run as separate services.  
+  - Alembic migrations ensure DB schema is up to date.  
+  - Docker images published for reproducible deployments.
+
+### Key Benefits
+- **Scalable**: horizontally scale API and Worker separately.  
+- **Robust**: resilient to failures and retries, API remains healthy under load.  
+- **Maintainable**: clean boundaries (API vs Worker, router vs repo).  
+- **Observable**: structured logging at all critical steps.
+
+> **In short:** Fast API calls are decoupled from heavy summarization work via an async worker + queue. This design ensures responsiveness, fault isolation, and easy horizontal scaling.
