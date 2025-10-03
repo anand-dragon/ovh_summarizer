@@ -22,6 +22,7 @@ Persistence via **Postgres**, background jobs via **Redis**.
   - [cURL examples](#curl-examples)
   - [Testing](#testing)
   - [Common Tasks](#common-tasks)
+  - [Architecture Decisions](#architecture-decisions)
 
 ---
 
