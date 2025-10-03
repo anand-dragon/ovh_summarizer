@@ -145,7 +145,7 @@ Run:
   ```
 With coverage
 ```bash
-  task test:container
+  task test:coverage
 ```
 
 ## Common Tasks
