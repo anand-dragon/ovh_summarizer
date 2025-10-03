@@ -8,7 +8,7 @@ tasks:
   run:api:
     desc: Run FastAPI server
     cmds:
-      - uv run uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000 --log-config logging.yaml
+      - uv run uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
 
   run:worker:
     desc: Run worker
@@ -62,11 +62,18 @@ tasks:
       - docker build -f deploy/api.Dockerfile -t summarizer-api .
       - docker build -f deploy/worker.Dockerfile -t summarizer-worker .
 
-  docker:up:
-    desc: Start docker-compose stack (ensures Ollama + model first)
+  docker:pull:
+    desc: Pull all app images from Docker Hub
     cmds:
+      - docker pull anand90d/summarizer-api:v0.1.0 || true
+      - docker pull anand90d/summarizer-worker:v0.1.0 || true
+
+  docker:up:
+    desc: Start docker-compose stack (pull images + ensure Ollama + run migrations)
+    cmds:
+      - task: docker:pull
       - task: ollama:ensure
-      - docker compose -f {{.COMPOSE_FILE}} up --build -d
+      - docker compose -f {{.COMPOSE_FILE}} up -d
       - docker compose -f {{.COMPOSE_FILE}} exec -T db sh -lc 'until pg_isready -U svc -d summarizer >/dev/null 2>&1; do sleep 1; done'
       - docker compose -f {{.COMPOSE_FILE}} exec -T api uv run alembic upgrade head
 

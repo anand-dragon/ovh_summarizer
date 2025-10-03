@@ -14,9 +14,7 @@ services:
     ports:
       - "6379:6379"
   api:
-    build:
-      context: ..
-      dockerfile: deploy/api.Dockerfile
+    image: anand90d/summarizer-api:v0.1.0
     depends_on:
       - db
     environment:
@@ -46,9 +44,7 @@ services:
       - OLLAMA_API_BASE_URL=http://ollama:11434/api
     restart: unless-stopped
   worker:
-    build:
-      context: ..
-      dockerfile: deploy/worker.Dockerfile
+    image: anand90d/summarizer-worker:v0.1.0
     depends_on:
       - db
       - redis
