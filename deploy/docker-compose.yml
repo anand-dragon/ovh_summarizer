@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: svc
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: summarizer
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql+asyncpg://svc:secret@db:5432/summarizer
+    ports:
+      - "8000:8000"
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./modelfiles:/modelfiles
+    environment:
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=1
+    restart: unless-stopped
+  webui:
+    image: ghcr.io/ollama-webui/ollama-webui:main
+    container_name: ollama-webui
+    ports:
+      - "3000:8080"
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_API_BASE_URL=http://ollama:11434/api
+    restart: unless-stopped
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/worker.Dockerfile
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: postgresql+asyncpg://svc:secret@db:5432/summarizer
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    restart: unless-stopped
+volumes:
+  pgdata:
+  ollama_data:

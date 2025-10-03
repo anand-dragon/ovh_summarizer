@@ -1,0 +1,33 @@
+target-version = "py312"
+indent-width = 4
+line-length = 120
+
+extend-exclude = ["CVS"]
+
+
+[lint]
+dummy-variable-rgx = "^(_+$|(_[a-zA-Z0-9_]*[a-zA-Z0-9]+?$)|dummy|^ignored_|^unused_)$"
+ignore = ["PLR0913", "PLR2004", "PLW2901", "PLR5501", "S101", "S105", "S113", "PLW0603"]
+select = [
+    "E",
+    "F",
+    "W",
+    "PL",
+    "S",
+    "B033",  # duplicate-value
+    "C416",  # unnecessary-comprehension
+    "UP004",  # useless-object-inheritance
+    "D419",  # empty-docstring
+]
+
+
+
+
+[format]
+quote-style = "double"
+line-ending = "lf"
+skip-magic-trailing-comma = true
+
+indent-style = "space"
+docstring-code-format = true
+

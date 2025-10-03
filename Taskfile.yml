@@ -1,0 +1,92 @@
+version: '3'
+
+vars:
+  OLLAMA_MODEL: '{{.OLLAMA_MODEL | default "gemma3:1b"}}'
+  COMPOSE_FILE: '{{.COMPOSE_FILE | default "deploy/docker-compose.yml"}}'
+
+tasks:
+  run:api:
+    desc: Run FastAPI server
+    cmds:
+      - uv run uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000 --log-config logging.yaml
+
+  run:worker:
+    desc: Run worker
+    cmds:
+      - uv run arq app.worker.tasks.WorkerSettings
+
+  lint:
+    desc: Run ruff
+    cmds:
+      - uv run ruff check .
+
+  typecheck:
+    desc: Run mypy
+    cmds:
+      - uv run mypy src/app/
+
+  ollama:pull-image:
+    desc: "Pull Ollama Docker image if not present (host image cache)"
+    cmds:
+      - |
+        if [[ "$(docker images -q ollama/ollama:latest 2>/dev/null)" == "" ]]; then
+          echo "Ollama image not found locally. Pulling..."
+          docker pull ollama/ollama:latest
+        else
+          echo "Ollama image already present. Skipping pull."
+        fi
+
+  ollama:up:
+    desc: "Start only the Ollama service"
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} up -d ollama
+
+  ollama:pull-model:
+    desc: "Pull model inside the running Ollama container"
+    cmds:
+      - echo "Pulling model {{.OLLAMA_MODEL}} into Ollama container..."
+      - docker compose -f {{.COMPOSE_FILE}} exec ollama ollama pull {{.OLLAMA_MODEL}}
+      - echo "Available models (tags):"
+      - docker compose -f {{.COMPOSE_FILE}} exec -T ollama ollama list
+
+  ollama:ensure:
+    desc: "Ensure Ollama image, container, readiness, and model"
+    deps: [ollama:pull-image]
+    cmds:
+      - task: ollama:up
+      - task: ollama:pull-model
+
+  docker:build:
+    desc: Build API + Worker Docker images
+    cmds:
+      - docker build -f deploy/api.Dockerfile -t summarizer-api .
+      - docker build -f deploy/worker.Dockerfile -t summarizer-worker .
+
+  docker:up:
+    desc: Start docker-compose stack (ensures Ollama + model first)
+    cmds:
+      - task: ollama:ensure
+      - docker compose -f {{.COMPOSE_FILE}} up --build -d
+      - docker compose -f {{.COMPOSE_FILE}} exec -T db sh -lc 'until pg_isready -U svc -d summarizer >/dev/null 2>&1; do sleep 1; done'
+      - docker compose -f {{.COMPOSE_FILE}} exec -T api uv run alembic upgrade head
+
+
+  docker:down:
+    desc: Stop stack
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} down -v
+
+  docs:openapi:
+    desc: Export OpenAPI schema
+    cmds:
+      - PYTHONPATH=src uv run python -c "import json; from app.api.main import app; open('api-doc/openapi.json','w').write(json.dumps(app.openapi(), indent=2))"
+
+  test:
+    desc: Run all pytest tests with coverage
+    cmds:
+      - uv run pytest -v tests/ -W ignore::DeprecationWarning
+
+  test:coverage:
+    desc: Run tests using Postgres container + coverage
+    cmds:
+      - uv run --with pytest-cov pytest -v --cov=app --cov-report=term --cov-report=html:tests/coverage_html tests/ -W ignore::DeprecationWarning
